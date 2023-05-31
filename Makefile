@@ -1,4 +1,4 @@
-obj-m += generic.o
+obj-m += dev_nr.o
 
 all:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
