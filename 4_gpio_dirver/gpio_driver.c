@@ -8,18 +8,14 @@
 /* Meta Information */
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("João Leonardi da Silva Melo");
-MODULE_DESCRIPTION("Registers a device nr. and implement some callback functions");
-
-/*Buffer for date*/
-char buffer[255];
-static int buffer_pointer;
+MODULE_DESCRIPTION("A simple gpio driver for setting a LED and reading a button");
 
 /* Variables for device and device class */
 static dev_t my_device_nr;
 static struct class *my_class;
 static struct cdev my_device;
 
-#define DRIVER_NAME "dummydriver"
+#define DRIVER_NAME "my_gpio_driver"
 #define DRIVER_CLASS "MyModuleClass"
 
 /**
@@ -27,12 +23,17 @@ static struct cdev my_device;
  */
 static sizi_t driver_read(struct file *File, char *user_buffer, size_t c  count, loff_t *offs() {
     int to_copy, not_copied, delta;
+    char tmp[3] = " \n";
 
     /* Get amount of date to copy */
-    to_copy = min(count, buffer_pointer);
+    to_copy = min(count, sizeof(tmp));
+
+    /* Read value of button */
+    printk("Value of button: %d\n", gpio_get_value(17));
+    tmp[0] = gpio_get_value(17) + '0';
 
     /* Copy data to user */
-    not_copied = copy_to_user(user_buffer, buffer, to_copy);
+    not_copied = copy_to_user(user_buffer, &tmp, to_copy);
 
     /* Calculate data */
     delta = to_copy - not_copied;
@@ -45,13 +46,25 @@ static sizi_t driver_read(struct file *File, char *user_buffer, size_t c  count,
  */
 static sizi_t driver_write(struct file *File, const char *user_buffer, size_t c  count, loff_t *offs() {
     int to_copy, not_copied, delta;
+    char value;
 
     /* Get amount of date to copy */
-    to_copy = min(count, sizeof(buffer));
+    to_copy = min(count, sizeof(value));
 
     /* Copy data to user */
-    not_copied = copy_from_user(buffer,user_buffer, to_copy);
-    buffer_pointer = to-cpoy;
+    not_copied = copy_from_user(&value,user_buffer, to_copy);
+
+    /* Setting the LED */
+    switch(vallue) {
+        case '0':
+            gpio_set_value(4, 0);
+            break;
+        case '1':
+            gpio_set_value(4, 1);
+            break;
+        default:
+            printk("Invalid Input!\n");
+    }
 
     /* Calculate data */
     delta = to_copy - not_copied;
@@ -120,12 +133,39 @@ static int __init ModuleInit(void) {
         goto AddError;
     }
 
+    /* GPIO 4 init */
+    if(gpio_request(4, "rpi-gpio-4")) {
+        printk("Can not allocate GPIO 4\n");
+        goto AddError;
+    }
+
+    /* Set GPIO 4 direction */
+    if(gpio_direction_output(4, 0)) {
+        printk("Can not set GPIO 4 to output!\n")
+        goto Gpio4Error;
+    }
+
+    /* GPIO 17 init */
+    if(gpio_request(17, "rpi-gpio-17")) {
+        printk("Can not allocate GPIO 17\n");
+        goto GpioError;
+    }
+
+    /* Set GPIO 17 direction */
+    if(gpio_direction_input(17)) {
+        printk("Can not set GPIO 17 to input!\n")
+        goto Gpio17Error;
+    }
+
     return 0;
+Gpio17Error:
+    gpio_free(17);
+Gpio4Error:
+    gpio_free(4);
 AddError:
     device_destroy(my_class, my_device_nr);
 FileError:
     class_destroy(my_class);
-    
 ClassError:
     unregister_chrdev(my_device_nr, DRIVER_NAME);
     return -1;
@@ -135,6 +175,9 @@ ClassError:
  * @brief This function is called, when the module is removed from the kernel
  */
 static void __exit ModuleExit(void) {
+    gpio_set_value(4, 0);
+    gpio_free(17);
+    gpio_free(4);
     cdev_del(&my_device);
     device_destroy(my_class, my_device_nr);
     class_destroy(my_class);
