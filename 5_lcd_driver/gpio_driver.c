@@ -4,67 +4,52 @@
 #include <linux/cdev.h>
 #include <linux/uaccess.h>
 #include <linux/gpio.h>
+#include <linux/delay.h>
 
 /* Meta Information */
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("João Leonardi da Silva Melo");
-MODULE_DESCRIPTION("Simple gpio driver for setting a LED and reading a button");
+MODULE_DESCRIPTION("Driver to write to a LCD text display");
 
 /* Variables for device and device class */
-static dev_t gpio_device_nr;
-static struct class *gpio_class;
-static struct cdev gpio_device;
+static dev_t lcd_device_nr;
+static struct class *lcd_class;
+static struct cdev lcd_device;
 
-#define DRIVER_NAME "rpi_gpio_driver"
-#define DRIVER_CLASS "GpioModuleClass"
+#define DRIVER_NAME "rpi_lcd_driver"
+#define DRIVER_CLASS "LCDModuleClass"
 
-/**
- * @brief  Read data out of the buffer
- */
-static ssize_t driver_read(struct file *File, char *user_buffer, size_t count, loff_t *offs) {
-    int to_copy, not_copied, delta;
-    char tmp[3] = " \n";
+/* LCD char buffer */
+static char lcd_buffer[17];
 
-    /* Get amount of date to copy */
-    to_copy = min(count, sizeof(tmp));
+/* Pinout for LCD Display */
+unsigned int gpios[] = {
+    3,  /* Enable Pin */
+    2,  /* Register Select Pin */
+    4,  /* Data Pin 0 */
+    5,  /* Data Pin */
+    9,  /* Data Pin 5 */
+    10, /* Data Pin 4 */
+    11, /* Data Pin 6 */
+    17, /* Data Pin 1 */
+    22, /* Data Pin 3 */
+    27, /* Data Pin 2 */
+};
 
-    /* Read value of button */
-    printk("Button value: %d\n", gpio_get_value(17));
-    tmp[0] = gpio_get_value(17) + '0';
-
-    /* Copy data to user */
-    not_copied = copy_to_user(user_buffer, &tmp, to_copy);
-
-    /* Calculate data */
-    delta = to_copy - not_copied;
-
-    return delta;
-}
+#define ENABLE_PIN gpios[0]
+#define REGISTER_SELECT gpios[1]
 
 /**
  * @brief Write data to buffer
- */
+*/
 static ssize_t driver_write(struct file *File, const char *user_buffer, size_t count, loff_t *offs) {
-    int to_copy, not_copied, delta;
-    char value;
+    int to_copy, not_copied, delta, i;
 
     /* Get amount of date to copy */
-    to_copy = min(count, sizeof(value));
+    to_copy = min(count, sizeof(lcd_buffer));
 
     /* Copy data to user */
-    not_copied = copy_from_user(&value,user_buffer, to_copy);
-
-    /* Setting the LED */
-    switch(value) {
-        case '0':
-            gpio_set_value(4, 0);
-            break;
-        case '1':
-            gpio_set_value(4, 1);
-            break;
-        default:
-            printk("Invalid input!\n");
-    }
+    not_copied = copy_from_user(lcd_buffer, user_buffer, to_copy);
 
     /* Calculate data */
     delta = to_copy - not_copied;
@@ -81,7 +66,7 @@ static int driver_open(struct inode *device_file, struct file *instance) {
 }
 
 /**
- * @brief This function is called, when the module is loaded into the kernel
+ * @brief This function is called, when the device  file is close
 */
 static int driver_close(struct inode *device_file, struct file *instance) {
     printk("dev_nr - close was called!\n");
