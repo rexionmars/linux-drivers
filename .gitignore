@@ -1,3 +1,7 @@
-.mod
-.ko
-.o
+drivers/*.mod
+drivers/*.ko
+drivers/*.o
+
+.idea
+cmake-build-debug
+
